@@ -170,6 +170,7 @@ namespace DepotDownloader
                 {
                     var app = app_value.Value;
 
+                    if (ContentDownloader.Config.Verbose) 
                     Console.WriteLine("Got AppInfo for {0}", app.ID);
                     AppInfo.Add(app.ID, app);
                 }
@@ -246,6 +247,7 @@ namespace DepotDownloader
                 }
                 else
                 {
+                    if (ContentDownloader.Config.Verbose) 
                     Console.WriteLine("Got appticket for {0}!", appTicket.AppID);
                     AppTickets[appTicket.AppID] = appTicket.Ticket;
                 }
@@ -266,6 +268,7 @@ namespace DepotDownloader
             Action<SteamApps.DepotKeyCallback> cbMethod = (depotKey) =>
             {
                 completed = true;
+                if (ContentDownloader.Config.Verbose) 
                 Console.WriteLine("Got depot key for {0} result: {1}", depotKey.DepotID, depotKey.Result);
 
                 if (depotKey.Result != EResult.OK)
@@ -292,6 +295,7 @@ namespace DepotDownloader
             Action<SteamApps.CDNAuthTokenCallback> cbMethod = (cdnAuth) =>
             {
                 completed = true;
+                if (ContentDownloader.Config.Verbose) 
                 Console.WriteLine("Got CDN auth token for {0} result: {1}", host, cdnAuth.Result);
 
                 if (cdnAuth.Result != EResult.OK)
@@ -356,6 +360,7 @@ namespace DepotDownloader
 
         private void ConnectedCallback(SteamClient.ConnectedCallback connected)
         {
+            if (ContentDownloader.Config.Verbose) 
             Console.WriteLine(" Done!");
             bConnecting = false;
             bConnected = true;
@@ -366,7 +371,7 @@ namespace DepotDownloader
             }
             else
             {
-                Console.Write( "Logging '{0}' into Steam3...", logonDetails.Username );
+                Console.WriteLine( "Logging '{0}' into Steam3...", logonDetails.Username );
                 steamUser.LogOn( logonDetails );
             }
         }
@@ -387,6 +392,7 @@ namespace DepotDownloader
 
             if (isSteamGuard || is2FA)
             {
+                if (ContentDownloader.Config.Verbose) 
                 Console.WriteLine("This account is protected by Steam Guard.");
 
                 Abort(false);
@@ -402,6 +408,7 @@ namespace DepotDownloader
                     logonDetails.AuthCode = Console.ReadLine();
                 }
 
+                if (ContentDownloader.Config.Verbose) 
                 Console.Write("Retrying Steam3 connection...");
                 Connect();
 
@@ -422,6 +429,7 @@ namespace DepotDownloader
                 return;
             }
 
+            if (ContentDownloader.Config.Verbose) 
             Console.WriteLine(" Done!");
 
             this.seq++;
@@ -429,6 +437,7 @@ namespace DepotDownloader
 
             if (ContentDownloader.Config.CellID == 0)
             {
+                if (ContentDownloader.Config.Verbose) 
                 Console.WriteLine("Using Steam3 suggested CellID: " + loggedOn.CellID);
                 ContentDownloader.Config.CellID = (int)loggedOn.CellID;
             }
@@ -436,6 +445,7 @@ namespace DepotDownloader
 
         private void SessionTokenCallback(SteamUser.SessionTokenCallback sessionToken)
         {
+            if (ContentDownloader.Config.Verbose)
             Console.WriteLine("Got session token!");
             credentials.SessionToken = sessionToken.SessionToken;
         }
@@ -450,6 +460,7 @@ namespace DepotDownloader
                 return;
             }
 
+            if (ContentDownloader.Config.Verbose) 
             Console.WriteLine("Got {0} licenses for account!", licenseList.LicenseList.Count);
             Licenses = licenseList.LicenseList;
 
@@ -458,6 +469,7 @@ namespace DepotDownloader
                 return lic.PackageID;
             });
 
+            if (ContentDownloader.Config.Verbose) 
             Console.WriteLine("Licenses: {0}", string.Join(", ", licenseQuery));
         }
 

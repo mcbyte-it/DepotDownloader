@@ -326,7 +326,7 @@ namespace DepotDownloader
             steam3.Disconnect();
         }
 
-        public static void DownloadApp(uint appId, uint depotId, string branch, bool forceDepot = false)
+        public static int DownloadApp(uint appId, uint depotId, string branch, bool forceDepot = false)
         {
             if(steam3 != null)
                 steam3.RequestAppInfo(appId);
@@ -335,7 +335,7 @@ namespace DepotDownloader
             {
                 string contentName = GetAppOrDepotName(INVALID_DEPOT_ID, appId);
                 Console.WriteLine("App {0} ({1}) is not available from this account.", appId, contentName);
-                return;
+                return 4;
             }
 
             var depotIDs = new List<uint>();
@@ -379,7 +379,7 @@ namespace DepotDownloader
                 if (depotIDs == null || (depotIDs.Count == 0 && depotId == INVALID_DEPOT_ID))
                 {
                     Console.WriteLine("Couldn't find any depots to download for app {0}", appId);
-                    return;
+                    return 3;
                 }
                 else if (depotIDs.Count == 0)
                 {
@@ -389,7 +389,7 @@ namespace DepotDownloader
                         Console.Write(" or not available on this platform");
                     }
                     Console.WriteLine();
-                    return;
+                    return 2;
                 }
             }
 
@@ -404,14 +404,16 @@ namespace DepotDownloader
                 }
             }
 
+            int retCode = 1;
             try
             {
-                DownloadSteam3(infos);
+                retCode = DownloadSteam3(infos);
             }
             catch (OperationCanceledException)
             {
                 Console.WriteLine("App {0} was not completely downloaded.", appId);
             }
+            return retCode;
         }
 
         static DepotDownloadInfo GetDepotInfo(uint depotId, uint appId, string branch)
@@ -553,10 +555,11 @@ namespace DepotDownloader
             return cdnClients;
         }
 
-        private static void DownloadSteam3( List<DepotDownloadInfo> depots )
+        private static int DownloadSteam3( List<DepotDownloadInfo> depots )
         {
             ulong TotalBytesCompressed = 0;
             ulong TotalBytesUncompressed = 0;
+            int retCode = 0;
 
             foreach (var depot in depots)
             {
@@ -626,7 +629,7 @@ namespace DepotDownloader
                         if (depotManifest == null)
                         {
                             Console.WriteLine("\nUnable to download manifest {0} for depot {1}", depot.manifestId, depot.id);
-                            return;
+                            return 1;
                         }
 
                         newProtoManifest = new ProtoManifest(depotManifest, depot.manifestId);
@@ -638,20 +641,24 @@ namespace DepotDownloader
 
                 newProtoManifest.Files.Sort((x, y) => { return x.FileName.CompareTo(y.FileName); });
 
-                if (Config.DownloadManifestOnly)
+                
+                // RRR always write manifest
+                StringBuilder manifestBuilder = new StringBuilder();
+                string txtManifest = Path.Combine(depot.installDir, string.Format("_steam_depot_manifest_{0}.csv", depot.id));
+
+                manifestBuilder.Append("\"File name\";\"File hash (SHA-1)\";\"File size\"\n");
+                foreach (var file in newProtoManifest.Files)
                 {
-                    StringBuilder manifestBuilder = new StringBuilder();
-                    string txtManifest = Path.Combine(depot.installDir, string.Format("manifest_{0}.txt", depot.id));
+                    if (file.Flags.HasFlag(EDepotFileFlag.Directory))
+                        continue;
 
-                    foreach (var file in newProtoManifest.Files)
-                    {
-                        if (file.Flags.HasFlag(EDepotFileFlag.Directory))
-                            continue;
+                    manifestBuilder.Append(string.Format("\"{0}\";\"{1}\";\"{2}\"\n", file.FileName, Util.EncodeHexString(file.FileHash), file.TotalSize));
+                }
 
-                        manifestBuilder.Append(string.Format("{0}\n", file.FileName));
-                    }
+                File.WriteAllText(txtManifest, manifestBuilder.ToString());
 
-                    File.WriteAllText(txtManifest, manifestBuilder.ToString());
+                // RRR return if -manifest-only is set
+                if (Config.DownloadManifestOnly) {
                     continue;
                 }
 
@@ -806,6 +813,7 @@ namespace DepotDownloader
                         }
                     }
 
+                    Console.Write("\nDownloading '{0}' [Size: {1}] ", fileFinalPath, Util.BytesToString(file.TotalSize));
                     foreach (var chunk in neededChunks)
                     {
                         if (cts.IsCancellationRequested) break;
@@ -851,6 +859,7 @@ namespace DepotDownloader
                                     else
                                     {
                                         Console.WriteLine("Encountered error downloading chunk {0}: {1}", chunkID, response.StatusCode);
+                                        retCode = 1;
                                     }
                                 }
                                 else
@@ -874,8 +883,10 @@ namespace DepotDownloader
                         if (chunkData == null)
                         {
                             Console.WriteLine("Failed to find any server with chunk {0} for depot {1}. Aborting.", chunkID, depot.id);
+                            retCode = 1;
                             return;
                         }
+                        Console.Write(".");
 
                         TotalBytesCompressed += chunk.CompressedLength;
                         DepotBytesCompressed += chunk.CompressedLength;
@@ -890,16 +901,17 @@ namespace DepotDownloader
 
                     fs.Close();
 
-                    Console.WriteLine("{0,6:#00.00}% {1}", ((float)size_downloaded / (float)complete_download_size) * 100.0f, fileFinalPath);
+                    Console.Write("\n\t{0,6:#00.00}% {1}", ((float)size_downloaded / (float)complete_download_size) * 100.0f, fileFinalPath);
                 });
 
                 ConfigStore.TheConfig.LastManifests[depot.id] = depot.manifestId;
                 ConfigStore.Save();
 
-                Console.WriteLine("Depot {0} - Downloaded {1} bytes ({2} bytes uncompressed)", depot.id, DepotBytesCompressed, DepotBytesUncompressed);
+                Console.WriteLine("\nDepot {0} - Downloaded {1} bytes ({2} bytes uncompressed)", depot.id, DepotBytesCompressed, DepotBytesUncompressed);
             }
 
             Console.WriteLine("Total downloaded: {0} bytes ({1} bytes uncompressed) from {2} depots", TotalBytesCompressed, TotalBytesUncompressed, depots.Count);
+            return retCode;
         }
     }
 }

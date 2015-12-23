@@ -22,6 +22,7 @@ namespace DepotDownloader
             ConfigStore.LoadFromFile(Path.Combine(Environment.CurrentDirectory, "DepotDownloader.config"));
 
             bool bDumpManifest = HasParameter( args, "-manifest-only" );
+            bool bVerbose = HasParameter(args, "-v");
             uint appId = GetParameter<uint>( args, "-app", ContentDownloader.INVALID_APP_ID );
             uint depotId = GetParameter<uint>( args, "-depot", ContentDownloader.INVALID_DEPOT_ID );
             ContentDownloader.Config.ManifestId = GetParameter<ulong>( args, "-manifest", ContentDownloader.INVALID_MANIFEST_ID );
@@ -39,6 +40,7 @@ namespace DepotDownloader
             }
 
             ContentDownloader.Config.DownloadManifestOnly = bDumpManifest;
+            ContentDownloader.Config.Verbose = bVerbose;
 
             int cellId = GetParameter<int>(args, "-cellid", -1);
             if (cellId == -1)
@@ -108,9 +110,46 @@ namespace DepotDownloader
                 Console.WriteLine("No username given. Using anonymous account with dedicated server subscription.");
             }
 
-            ContentDownloader.InitializeSteam3(username, password);
-            ContentDownloader.DownloadApp(appId, depotId, branch, forceDepot);
+            int retCode = 0;
+
+            if (appId == 0) // we will get apps and depots from list
+            {
+                if (!File.Exists("depot_list.txt"))
+                {
+                    Console.WriteLine("depot_list.txt does not exist, aborting.");
+                    Environment.Exit(10);
+                }
+
+                Console.WriteLine("Bulk downloading apps and depots...");
+
+                ContentDownloader.InitializeSteam3(username, password);
+
+                string[] lines = System.IO.File.ReadAllLines(@"depot_list.txt");
+
+                // Display the file contents by using a foreach loop.
+                foreach (string line in lines)
+                {
+                    string[] tuple = line.Split(',');
+                    if (tuple.Length < 2)
+                        continue;
+
+                    appId = UInt32.Parse(tuple[0]);
+                    depotId = UInt32.Parse(tuple[1]);
+
+                    Console.WriteLine("App: {0} |  Depot: {1}", appId, depotId);
+                    retCode = ContentDownloader.DownloadApp(appId, depotId, branch, forceDepot);
+                    Console.Write("\n\n\n");
+                }
+
+            }
+            else
+            {
+                ContentDownloader.InitializeSteam3(username, password);
+                retCode = ContentDownloader.DownloadApp(appId, depotId, branch, forceDepot);
+            }
             ContentDownloader.ShutdownSteam3();
+
+            Environment.Exit(retCode);
         }
 
         static int IndexOfParam( string[] args, string param )
@@ -167,6 +206,7 @@ namespace DepotDownloader
             Console.WriteLine( "\t-manifest <id>\t\t\t- manifest id of content to download (requires -depot, default: current for branch)." );
             Console.WriteLine( "\t-max-servers <#>\t\t\t- maximum number of content servers to use. (default: 8)." );
             Console.WriteLine( "\t-max-downloads <#>\t\t\t- maximum number of chunks to download concurrently. (default: 4)." );
+            Console.WriteLine( "\t-v\t\t\t- be verbose, write more information.");
         }
     }
 }
